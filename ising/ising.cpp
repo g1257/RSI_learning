@@ -1,6 +1,6 @@
 #include <iostream>
 #include <iomanip>
-#include "../codes/PsimagLite/src/Matrix.h"
+#include "PsimagLite/src/Matrix.h"
 
 extern "C" {
     void dgeev_(char* jobvl, char* jobvr, int* n, double* a, int* lda,
@@ -26,12 +26,12 @@ double computeCorrelation(unsigned int site, const std::vector<double>& gs)
 
 int main(int argc, char* argv[])
 {
-	if (argc != 3) {
-		std::cerr<<"USAGE: "<<argv[0]<<" number_of_sites J\n";
+	if (argc != 4) {
+		std::cerr<<"USAGE: "<<argv[0]<<" number_of_sites J periodic\n";
 		return 1;
 	}
 
-	bool periodic = true;
+	bool periodic = (atoi(argv[3]) == 1);
 	// Number of sites
 	unsigned int n = atoi(argv[1]); // don't use atoi atof std:: something to double need to search on the web
 	double couplingJ = atof(argv[2]);
@@ -90,7 +90,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	std::cout<<hamiltonian;
+	//std::cout<<hamiltonian;
 
 	// Diagonalize it and find eigenvalues --> homework
 	// Think about the ground state, what energy does it have?
@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
 	std::vector<double> eigs(hilbert);
 
 	diag(hamiltonian, eigs, 'V');
-	std::cout<<eigs[0]<<"\n";
+	std::cout<<eigs[0]<<"\n";;
 	std::vector<double> gs(hilbert);
 	for (unsigned int k = 0; k < hilbert; ++k) {
 		gs[k] = hamiltonian(k, 0);
