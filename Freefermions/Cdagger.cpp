@@ -1,7 +1,6 @@
 #include <iostream>
 #include <iomanip>
 #include "../../codes/PsimagLite/src/Matrix.h"
-#include "Cdagger.h"
 
 // states | 0 0 1 0> for N = 4
     // c|0> = 0 and c|1> = 0; c
