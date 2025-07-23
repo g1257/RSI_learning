@@ -9,9 +9,18 @@
 //LanczosPlusPlus is doing the combinatorial problem
 double doPeriodic(unsigned int nsites, unsigned int npart)
 {
-	// the only thing that changes is the k
-	// k = 2pi m / n
-	return 0;
+	// unused npart for now because looking for the g.s. of all the sectors
+
+	double sum = 0;
+	for (unsigned m = 0; m < nsites; ++m) {
+		double k = M_PI*m*2./nsites;
+		double one_particle_ek = -2 * cos(k);
+		if (one_particle_ek < 0) {
+			sum += one_particle_ek;
+		}
+	}
+
+	return sum;
 }
 
 double doOpen(unsigned int nsites, unsigned int npart)
