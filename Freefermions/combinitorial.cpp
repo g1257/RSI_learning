@@ -10,31 +10,8 @@ SizeType LanczosPlusPlus::BasisOneSpin::nsite_;
 
 using BasisOneSite = LanczosPlusPlus::BasisOneSpin;
 
-/* extern "C" {
-    void dgeev_(char* jobvl, char* jobvr, int* n, double* a, int* lda,
-                double* wr, double* wi, double* vl, int* ldvl,
-                double* vr, int* ldvr, double* work, int* lwork, int* info);
-}*/
 
-// <gs|sigmax_0 sigmax_site |gs>
-double computeCorrelation(unsigned int site, const std::vector<double>& gs, const BasisOneSite& bos)
-{
-	unsigned int hilbert = gs.size();
-	double sum = 0;
-	for (unsigned int alpha = 0; alpha < hilbert; ++alpha) {
-		// This masks two sites: site site, and site 0
-		unsigned mask = (1<<site) | 1;
-		if (site == 0) mask = 0;
-		unsigned int stateAlpha = bos[alpha];
-		unsigned stateBeta = stateAlpha ^ mask;
-		unsigned int beta = bos.perfectIndex(stateBeta); // the index for state stateBeta
-		assert(beta < gs.size()); // and also for alpha 
-		sum += gs[alpha]*gs[beta];
-	}
-
-	return sum;
-}
-
+// Symmetrize a matrix (unused for now)
 void symmetrize(PsimagLite::Matrix<double>& matrix)
 {
 	unsigned int rank = matrix.rows();
@@ -60,7 +37,6 @@ int fermionSign(unsigned int state, unsigned int ind, unsigned int jnd, int ferm
 	unsigned int tmpindless = (maskindless & state);
 	unsigned int tmpjndless = (maskjndless & state);
 	unsigned int count = PsimagLite::BitManip::countKernighan(tmpindless) + PsimagLite::BitManip::countKernighan(tmpjndless);
-	if (state == 3) std::cout<<"fs===="<<state<<"    "<<ind<<" "<<jnd<<"    "<<count<<"\n";
 
 	if (ind > jnd) {
 		++count;
@@ -68,8 +44,30 @@ int fermionSign(unsigned int state, unsigned int ind, unsigned int jnd, int ferm
 
 	int val = (count & 1) ? fermion_sign : 1;
 
-	std::cout<<"                   count="<<count<<"   val="<<val<<"\n";
 	return val;
+}
+
+double computeCorrelation(unsigned int ind, unsigned int jnd, const std::vector<double>& gs, const BasisOneSite& bos, int fermion_sign)
+{
+	unsigned int hilbert = gs.size();
+	double sum = 0;
+	bool sitesEqual = (ind == jnd);
+	for (unsigned int alpha = 0; alpha < hilbert; ++alpha) {
+		unsigned int maski = (1<<ind);
+		unsigned int maskj = (1<<jnd);
+		// This masks two sites: site ind, site jnd
+		unsigned mask = (sitesEqual) ? 0 : maski | maskj;
+		unsigned int stateAlpha = bos[alpha];
+		if (!sitesEqual && (stateAlpha & maski)) continue; // can't apply cdagger at ind
+		unsigned stateBeta = stateAlpha ^ mask;
+		if (!sitesEqual && (stateBeta & maskj)) continue; // can't apply c at jnd
+		unsigned int beta = bos.perfectIndex(stateBeta); // the index for state stateBeta
+		assert(beta < gs.size()); // and also for alpha
+		int fs = (sitesEqual) ? 1 : fermionSign(stateAlpha, ind, jnd, fermion_sign);
+		sum += gs[alpha]*gs[beta]*fs;
+	}
+
+	return sum;
 }
 
 int main(int argc, char* argv[])
@@ -163,12 +161,9 @@ int main(int argc, char* argv[])
 			}
 
 
-			std::cout<<row<<" "<<col<<"      "<<fs<<"\n";
 			hamiltonian(row, col) = couplingJ * fs;
 		}
 	}
-
-	//symmetrize(hamiltonian);
 
 	std::cout<<hamiltonian;
 	std::cout.precision(12);
@@ -177,17 +172,22 @@ int main(int argc, char* argv[])
 	std::vector<double> eigs(hilbert);
 
 	diag(hamiltonian, eigs, 'V');
-	std::cout<<"gound state energy "<<eigs[0]<<"\n";
+	std::cout<<"ground state energy "<<eigs[0]<<"\n";
 	std::vector<double> gs(hilbert);
 	for (unsigned int k = 0; k < hilbert; ++k) {
+		//std::cout<<eigs[k]<<" <---\n";
 		gs[k] = hamiltonian(k, 0);
 	}
 
-	for (unsigned int site = 0; site < n; ++site) {
-		double correlation = computeCorrelation(site, gs, bos);
-		std::cout<<site<<" "<<correlation<<"\n";
+	std::cout<<"cdaggeri cj\n";
+	for (unsigned int i = 0; i < n; ++i) {
+		for (unsigned int j = 0; j < n; ++j) {
+			double correlation = computeCorrelation(i, j, gs, bos, FERMION_SIGN);
+			std::cout<<correlation<<" ";
+		}
+
+		std::cout<<"\n";
 	}
 
 	std::cout<<"\n";
 }
-
