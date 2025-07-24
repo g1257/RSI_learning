@@ -1,0 +1,27 @@
+Hard core bosons 
+L         periodic	Energy
+		 
+4	  False		-2.2360679775
+6	  False 	-3.49395920743
+8	  False		-4.75877048314
+The numbers from combinitorial and Cdagger are the same for the above
+4 	  True 		-2.82842712475
+6	  True 		-4
+8	  True		-5.22625185951
+The number are all the same
+---------------------------------------------------------------
+Fermioins - This is from Lacouzs
+
+L	periodic 	Energy
+4	False		-2.23606798
+6	False		-3.49395921
+8	False		-4.75877048
+10	False		-6.02667418
+4	True		-2.00000000
+6	True		-4.00000000
+8	True		-4.82842712
+10	True		-6.47213595	
+13      False		-7.87524547
+14	False		-8.56677223
+15	False 		-9.15317039
+16	False 		-9.83795145 	
