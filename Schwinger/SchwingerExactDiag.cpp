@@ -220,7 +220,7 @@ void addNonDiagonalOneL(MatrixType& m, const VectorType& d, unsigned int ind, co
 
 			unsigned int j = (i ^ (mask1 | mask2));
 
-			int l2 = computeLanySite(l1, c1 - c2, n);
+			int l2 = computeLanySite(field, c2 - c1, n);
 
 			unsigned int l2index = fieldToIndex(l2, n);
 			unsigned int col = j + two_to_the_N*l2index;
@@ -343,6 +343,10 @@ void buildGroundState(VectorType& gs, const ParamsType& params)
 	buildHamiltonian(hamiltonian, params);
 
 	if (!isHermitian(hamiltonian)) {
+		if (hamiltonian.rows() < 40) {
+			std::cout<<hamiltonian;
+		}
+
 		err("Ham not hermitian\n");
 	}
 

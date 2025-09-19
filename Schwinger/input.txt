@@ -2,4 +2,4 @@ integer use_lanczos 0
 integer N 8
 integer n 3
 real mass -2.5
-real t 0.
+special t
