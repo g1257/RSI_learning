@@ -1,4 +1,4 @@
-CXXFLAGS=-Werror -Wall -g3 -I../../PsimagLite/src
+CXXFLAGS=-Werror -Wall -O3 -I../../PsimagLite/src -I../../PsimagLite
 LDFLAGS=-L../../PsimagLite/lib -lpsimaglite -llapack -lblas
 
 all: schwinger
@@ -9,3 +9,5 @@ schwinger: SchwingerExactDiag.o
 SchwingerExactDiag.o: SchwingerExactDiag.cpp
 	g++ -c SchwingerExactDiag.cpp $(CXXFLAGS)
 
+clean:
+	rm -f SchwingerExactDiag.o schwinger

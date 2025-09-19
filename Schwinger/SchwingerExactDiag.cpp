@@ -2,6 +2,8 @@
 #include <vector>
 #include <fstream>
 
+#include "CrsMatrix.h"
+#include "LanczosSolver.h"
 #include "Matrix.h"
 #include "PsimagLite.h"
 
@@ -52,6 +54,8 @@ public:
 			N_ = value;
 		} else if (label == "n") {
 			n_ = value;
+		} else if (label == "use_lanczos") {
+			use_lanczos = value;
 		} else {
 			err("Params::set(): unknown param " + label + "\n");
 		}
@@ -87,10 +91,12 @@ public:
 			return N_;
 		} else if (label == "n") {
 			return n_;
-		} else if (label == "mass" || label == "m") {
+		} else if (label == "mass") {
 			return mass_;
 		} else if (label == "t") {
 			return t_;
+		} else if (label == "use_lanczos") {
+			return use_lanczos;
 		} else {
 			err("Params::get(): unknown param " + label + "\n");
 		}
@@ -104,6 +110,7 @@ private:
 	double t_ = 0;
 	unsigned int N_ = 0;
 	unsigned int n_ = 0;
+	unsigned int use_lanczos = 0;
 };
 
 using ParamsType = Params;
@@ -131,9 +138,8 @@ bool isInRange(int l, unsigned int n)
 	return (l >= -max && l <= max);
 }
 
-int computeLanySite(int prev, unsigned int charge, unsigned int n)
+int computeLanySite(int prev, int val, unsigned int n)
 {
-	int val = (charge) ? 1 : -1;
 	int l = prev + val;
 
 	int max = maxField(n);
@@ -150,10 +156,10 @@ int computeLanySite(int prev, unsigned int charge, unsigned int n)
 	return l;
 }
 
-int computeL(int prev, unsigned int charge, unsigned int site, unsigned int n)
+int computeL(int prev, int charge, unsigned int site, unsigned int n)
 {
-	unsigned int charge_modif = (site & 1) ? charge - 1 : charge;
-	return computeLanySite(prev, charge_modif, n);
+	int val = (site & 1) ? charge - 1 : charge;
+	return computeLanySite(prev, val, n);
 }
 
 double measureSigma(const VectorType& gs, const ParamsType& params)
@@ -213,9 +219,8 @@ void addNonDiagonalOneL(MatrixType& m, const VectorType& d, unsigned int ind, co
 			}
 
 			unsigned int j = (i ^ (mask1 | mask2));
-			unsigned int add = (c1 < c2) ? 1 : 0;
 
-			int l2 = computeLanySite(l1, add, n);
+			int l2 = computeLanySite(l1, c1 - c2, n);
 
 			unsigned int l2index = fieldToIndex(l2, n);
 			unsigned int col = j + two_to_the_N*l2index;
@@ -240,7 +245,7 @@ VectorType buildDiagonalNoField(const ParamsType& params)
 {
 	unsigned int N = params.get("N");
 	unsigned int n = params.get("n");
-	unsigned int m = params.get("m");
+	double m = params.get("mass");
 	unsigned int two_to_the_N = (1 << N);
 	double factor = m*n*0.5/M_PI;
 	VectorType dvector(two_to_the_N);
@@ -295,20 +300,60 @@ void buildHamiltonian(MatrixType& m, const ParamsType& params)
 	addNonDiagonal(m, diagonal, params);
 }
 
+void buildGroundStateLanczos(MatrixType& m, VectorType& gs, const ParamsType& params)
+{
+	unsigned int hilbert = m.rows();
+	assert(m.cols() == hilbert);
+    PsimagLite::CrsMatrix<double> msparse(m);
+
+	using SolverParametersType = PsimagLite::ParametersForSolver<double>;
+
+    SolverParametersType params_lanczos;
+    params_lanczos.lotaMemory = true;
+	params_lanczos.tolerance = 1e-16;
+
+    PsimagLite::LanczosSolver<SolverParametersType,
+                              PsimagLite::CrsMatrix<double>,
+                              VectorType>
+        lanczosSolver(msparse, params_lanczos);
+
+    double e = 0;
+	gs.resize(hilbert);
+    VectorType initial(hilbert);
+    PsimagLite::fillRandom(initial);
+    lanczosSolver.computeOneState(e, gs, initial, 0);
+}
+
+void buildGroundStateEd(MatrixType& m, VectorType& gs)
+{
+	unsigned int hilbert = m.rows();
+	std::vector<double> eigs(hilbert);
+	diag(m, eigs, 'V');
+
+
+	gs.resize(hilbert);
+	for (unsigned int i = 0; i < hilbert; ++i) {
+		gs[i] = m(i, 0);
+	}
+}
+
 void buildGroundState(VectorType& gs, const ParamsType& params)
 {
 	MatrixType hamiltonian;
 	buildHamiltonian(hamiltonian, params);
 
+	if (!isHermitian(hamiltonian)) {
+		err("Ham not hermitian\n");
+	}
+
 	unsigned int hilbert = hamiltonian.rows();
 	assert(hilbert == hamiltonian.cols());
 
-	std::vector<double> eigs(hilbert);
-	diag(hamiltonian, eigs, 'V');
-
-	gs.resize(hilbert);
-	for (unsigned int i = 0; i < hilbert; ++i) {
-		gs[i] = hamiltonian(i, 0);
+	bool use_lanczos = (params.get("use_lanczos") > 0);
+	if (use_lanczos) {
+		buildGroundStateLanczos(hamiltonian, gs, params);
+	} else {
+		buildGroundStateEd(hamiltonian, gs);
 	}
 }
 
