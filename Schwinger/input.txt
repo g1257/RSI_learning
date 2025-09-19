@@ -1,0 +1,4 @@
+integer N 6
+integer n 3
+real mass -2.5
+real t 1.
