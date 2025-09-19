@@ -310,7 +310,7 @@ void buildGroundStateLanczos(MatrixType& m, VectorType& gs, const ParamsType& pa
 
     SolverParametersType params_lanczos;
     params_lanczos.lotaMemory = true;
-	params_lanczos.tolerance = 1e-16;
+	params_lanczos.tolerance = 1e-30;
 
     PsimagLite::LanczosSolver<SolverParametersType,
                               PsimagLite::CrsMatrix<double>,

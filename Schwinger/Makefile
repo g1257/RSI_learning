@@ -1,4 +1,4 @@
-CXXFLAGS=-Werror -Wall -O3 -I../../PsimagLite/src -I../../PsimagLite
+CXXFLAGS=-Werror -Wall -O3 -I../../PsimagLite/src -I../../PsimagLite -g3
 LDFLAGS=-L../../PsimagLite/lib -lpsimaglite -llapack -lblas
 
 all: schwinger
