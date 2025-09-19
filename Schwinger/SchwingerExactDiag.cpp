@@ -93,27 +93,49 @@ private:
 
 using ParamsType = Params;
 
-double integerToField(int ind, unsigned int n)
+int maxField(unsigned int n)
 {
-	int max = (n & 1) ? (n - 1)/2 : n/2;
-	return ind - max;
+	return (n & 1) ? (n - 1)/2 : n/2;
 }
 
-unsigned int computeLanySite(unsigned int prev, unsigned int charge, unsigned int n)
+int indexToField(int ind, unsigned int n)
 {
-	unsigned int l = prev + 1;
-	if (charge && l >= n) {
-		l = 0;
+	return ind - maxField(n);
+}
+
+unsigned int fieldToIndex(int l, unsigned int n)
+{
+	int index = l + maxField(n);
+	assert(index >= 0 && index < static_cast<int>(n));
+	return index;
+}
+
+bool isInRange(int l, unsigned int n)
+{
+	int max = maxField(n);
+	return (l >= -max && l <= max);
+}
+
+int computeLanySite(int prev, unsigned int charge, unsigned int n)
+{
+	int val = (charge) ? 1 : -1;
+	int l = prev + val;
+
+	int max = maxField(n);
+
+	if (l > max) {
+		l = -max;
 	}
 
-	if (!charge) {
-		l = (prev > 0) ? prev - 1 : n - 1;
+	if (l < -max) {
+		l = max;
 	}
 
+	assert(isInRange(l, n));
 	return l;
 }
 
-unsigned int computeL(unsigned int prev, unsigned int charge, unsigned int site, unsigned int n)
+int computeL(int prev, unsigned int charge, unsigned int site, unsigned int n)
 {
 	unsigned int charge_modif = (site & 1) ? charge - 1 : charge;
 	return computeLanySite(prev, charge_modif, n);
@@ -125,15 +147,16 @@ double measureSigma(const VectorType& gs, const ParamsType& params)
 	unsigned int n = params.get("n");
 	unsigned int two_to_the_N = (1 << N);
 	double sum1 = 0;
-	for (unsigned int l = 0; l < n; ++l) {
+	for (unsigned int lindex = 0; lindex < n; ++lindex) {
+		int field = indexToField(lindex, n);
 		for (unsigned int i = 0; i < two_to_the_N; ++i) {
-			double gs_val = gs[i + l*two_to_the_N];
-			unsigned int prev = l;
+			double gs_val = gs[i + lindex*two_to_the_N];
+			int prev = field;
 			double sum2 = 0;
 			for (unsigned int site = 0; site < N; ++site) {
 				unsigned int mask1 = (1 << site);
-				unsigned int e1 = (i & mask1) ? 1 : 0;
-				unsigned int l1 = computeL(prev, e1, site, n);
+				unsigned int c1 = (i & mask1) ? 1 : 0; // charge at site
+				int l1 = computeL(prev, c1, site, n);
 				sum2 += l1;
 				prev = l1;
 			}
@@ -153,40 +176,37 @@ void addNonDiagonalOneL(MatrixType& m, const VectorType& d, unsigned int ind, co
 	unsigned int two_to_the_N = (1 << N);
 	unsigned int hilbert = two_to_the_N*n;
 	double factor = -t*n*0.5/M_PI;
+	int field = indexToField(ind, n);
+
 	m.resize(hilbert, hilbert);
+
 	for (unsigned i = 0; i < two_to_the_N; ++i) {
 		unsigned int row = ind*two_to_the_N + i;
 		m(row, row) = d[row];
 
-		unsigned int prev = ind;
+		int prev = field;
 		// Open BC
 		for (unsigned int site = 0; site < N - 1; ++site) {
 			unsigned int mask1 = (1 << site);
 			unsigned int mask2 = (1 << (site + 1));
-			unsigned int e1 = (i & mask1) ? 1 : 0;
-			unsigned int e2 = (i & mask2) ? 1 : 0;
-			unsigned int l1 = computeL(prev, e1, site, n);
-			if (e1 == e2) {
+			unsigned int c1 = (i & mask1) ? 1 : 0; // charge at site
+			unsigned int c2 = (i & mask2) ? 1 : 0; // charge at site + 1
+			int l1 = computeL(prev, c1, site, n);
+			if (c1 == c2) {
 				prev = l1;
 				continue;
 			}
 
 			unsigned int j = (i ^ (mask1 | mask2));
-			bool add_l = (e1 < e2);
+			unsigned int add = (c1 < c2) ? 1 : 0;
 
-			unsigned int l2 = l1 + 1;
-			if (add_l && l2 >= n) {
-					l2 = 0;
-			}
+			int l2 = computeLanySite(l1, add, n);
 
-			if (!add_l) {
-				l2 = (l1 > 0) ? l1 - 1 : n - 1;
-			}
-
-			unsigned int col = j + two_to_the_N*l2;
+			unsigned int l2index = fieldToIndex(l2, n);
+			unsigned int col = j + two_to_the_N*l2index;
 			assert(col < m.cols());
 			// No fermion sign because it's one dimensional with OBC
-			m(row, col) = factor;
+			m(row, col) += factor;
 			prev = l1;
 		}
 	}
@@ -200,7 +220,7 @@ void addNonDiagonal(MatrixType& m, const VectorType& diagonal, const ParamsType&
 	}
 }
 
-VectorType buildDiagonalSectorZero(const ParamsType& params)
+VectorType buildDiagonalNoField(const ParamsType& params)
 {
 	unsigned int N = params.get("N");
 	unsigned int n = params.get("n");
@@ -227,7 +247,7 @@ VectorType buildDiagonalSectorZero(const ParamsType& params)
 
 void setDiagonal(VectorType& dvector, const VectorType& dvector0, unsigned int ind, unsigned int n)
 {
-	double etilde = integerToField(ind, n);
+	double etilde = indexToField(ind, n);
 	const double e_squared = etilde * etilde;
 	unsigned int two_to_the_N = dvector0.size();
 	unsigned int offset = ind*two_to_the_N;
@@ -243,7 +263,7 @@ VectorType computeDiagonal(const ParamsType& params)
 	unsigned int two_to_the_N = (1 << N);
 	unsigned int hilbert = n*two_to_the_N;
 
-	VectorType dvector0 = buildDiagonalSectorZero(params);
+	VectorType dvector0 = buildDiagonalNoField(params);
 
 	VectorType dvector(hilbert);
 	for (unsigned int i = 1; i < n; ++i) {
