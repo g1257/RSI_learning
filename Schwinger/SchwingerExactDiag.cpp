@@ -35,6 +35,8 @@ public:
 				unsigned int ival = 0;
 				fin >> ival;
 				set(label, ival);
+			} else if (stype == "special") {
+				setSpecial(label);
 			} else {
 				fin.close();
 				err("Unknown type " + stype + " must be real or integer\n");
@@ -63,6 +65,19 @@ public:
 			t_ = value;
 		} else {
 			err("Params::set(): unknown param " + label + "\n");
+		}
+	}
+
+	void setSpecial(const std::string& label)
+	{
+		if (label == "t") {
+			if (n_ == 0) {
+				err("special t requires n to be set before\n");
+			}
+
+			t_ = 2.*M_PI/n_;
+		} else {
+			 err("Params: unknown param or special " + label + "\n");
 		}
 	}
 
@@ -172,7 +187,7 @@ void addNonDiagonalOneL(MatrixType& m, const VectorType& d, unsigned int ind, co
 {
 	unsigned int N = params.get("N");
 	unsigned int n = params.get("n");
-	unsigned int t = params.get("t");
+	double t = params.get("t");
 	unsigned int two_to_the_N = (1 << N);
 	unsigned int hilbert = two_to_the_N*n;
 	double factor = -t*n*0.5/M_PI;
@@ -205,6 +220,7 @@ void addNonDiagonalOneL(MatrixType& m, const VectorType& d, unsigned int ind, co
 			unsigned int l2index = fieldToIndex(l2, n);
 			unsigned int col = j + two_to_the_N*l2index;
 			assert(col < m.cols());
+			assert(col != row);
 			// No fermion sign because it's one dimensional with OBC
 			m(row, col) += factor;
 			prev = l1;
@@ -326,7 +342,7 @@ int main(int argc, char* argv[])
 
 	ParamsType params(argv[1]);
 	double m_initial = std::atof(argv[2]);
-	double m_total = std::atoi(argv[3]);
+	unsigned int m_total = std::atoi(argv[3]);
 	double m_step = std::atof(argv[4]);
 	std::vector<double> sigmas = computeSigmas(params, m_initial, m_total, m_step);
 }
