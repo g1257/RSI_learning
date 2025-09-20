@@ -324,10 +324,10 @@ void buildGroundStateLanczos(MatrixType& m, VectorType& gs, const ParamsType& pa
     lanczosSolver.computeOneState(e, gs, initial, 0);
 }
 
-void buildGroundStateEd(MatrixType& m, VectorType& gs)
+void buildGroundStateEd(VectorType& eigs, MatrixType& m, VectorType& gs)
 {
 	unsigned int hilbert = m.rows();
-	std::vector<double> eigs(hilbert);
+	eigs.resize(hilbert);
 	diag(m, eigs, 'V');
 
 
@@ -337,7 +337,7 @@ void buildGroundStateEd(MatrixType& m, VectorType& gs)
 	}
 }
 
-void buildGroundState(VectorType& gs, const ParamsType& params)
+void buildGroundState(VectorType& energies, VectorType& gs, const ParamsType& params)
 {
 	MatrixType hamiltonian;
 	buildHamiltonian(hamiltonian, params);
@@ -355,28 +355,26 @@ void buildGroundState(VectorType& gs, const ParamsType& params)
 
 	bool use_lanczos = (params.get("use_lanczos") > 0);
 	if (use_lanczos) {
+		err("Lanczos support disabled for now (sorry)\n");
 		buildGroundStateLanczos(hamiltonian, gs, params);
 	} else {
-		buildGroundStateEd(hamiltonian, gs);
+		buildGroundStateEd(energies, hamiltonian, gs);
 	}
 }
 
-double computeOneSigma(const ParamsType& params)
-{
-	std::vector<double> gs;
-	buildGroundState(gs, params);
-	double sigma = measureSigma(gs, params);
-	return sigma;
-}
-
-std::vector<double> computeSigmas(ParamsType& params, double m_initial, unsigned int m_total, double m_step)
+std::vector<double> computeThings(ParamsType& params, double m_initial, unsigned int m_total, double m_step)
 {
 	std::vector<double> sigma(m_total);
+	std::vector<double> gs;
+	std::vector<double> energies;
 	for (unsigned int i = 0; i < m_total; ++i) {
 		double mass = m_initial + i*m_step;
 		params.set("mass", mass);
-		sigma[i] = computeOneSigma(params);
-		std::cout<<mass<<" "<<sigma[i]<<"\n";
+		buildGroundState(energies, gs, params);
+		sigma[i] = measureSigma(gs, params);
+		assert(energies.size() > 1);
+		double gap = energies[1] - energies[0];
+		std::cout<<mass<<" "<<sigma[i]<<" "<<gap<<"\n";
 	}
 
 	return sigma;
@@ -393,5 +391,5 @@ int main(int argc, char* argv[])
 	double m_initial = std::atof(argv[2]);
 	unsigned int m_total = std::atoi(argv[3]);
 	double m_step = std::atof(argv[4]);
-	std::vector<double> sigmas = computeSigmas(params, m_initial, m_total, m_step);
+	std::vector<double> sigmas = computeThings(params, m_initial, m_total, m_step);
 }
