@@ -6,10 +6,16 @@
 #include "LanczosSolver.h"
 #include "Matrix.h"
 #include "PsimagLite.h"
+#include "Models/HubbardOneOrbital/BasisOneSpin.h"
+#include "BitManip.h"
 
 using MatrixType = PsimagLite::Matrix<double>;
 using VectorType = std::vector<double>;
 using VectorUintType = std::vector<unsigned int>;
+using BasisFermions = LanczosPlusPlus::BasisOneSpin;
+
+PsimagLite::Matrix<SizeType> LanczosPlusPlus::BasisOneSpin::comb_;
+SizeType LanczosPlusPlus::BasisOneSpin::nsite_;
 
 class Params {
 public:
@@ -45,6 +51,7 @@ public:
 			}
 		}
 
+		basis_fermions = new BasisFermions(N_, this->get("npart"));
 		std::cerr<<N_<<" "<<n_<<" "<<t_<<" "<<mass_<<"\n";
 	}
 
@@ -56,6 +63,8 @@ public:
 			n_ = value;
 		} else if (label == "use_lanczos") {
 			use_lanczos = value;
+		} else if (label == "npart") {
+			npart_ = value;
 		} else {
 			err("Params::set(): unknown param " + label + "\n");
 		}
@@ -97,11 +106,19 @@ public:
 			return t_;
 		} else if (label == "use_lanczos") {
 			return use_lanczos;
+		} else if (label == "npart") {
+			return npart_;
 		} else {
 			err("Params::get(): unknown param " + label + "\n");
 		}
 
 		return 0;
+	}
+
+	const BasisFermions& basisFermions() const
+	{
+		assert(basis_fermions);
+		return *basis_fermions;
 	}
 
 private:
@@ -111,6 +128,8 @@ private:
 	unsigned int N_ = 0;
 	unsigned int n_ = 0;
 	unsigned int use_lanczos = 0;
+	unsigned int npart_ = 0;
+	BasisFermions* basis_fermions = nullptr;
 };
 
 using ParamsType = Params;
@@ -166,17 +185,19 @@ double measureSigma(const VectorType& gs, const ParamsType& params)
 {
 	unsigned int N = params.get("N");
 	unsigned int n = params.get("n");
-	unsigned int two_to_the_N = (1 << N);
+	const BasisFermions& basis_fermions = params.basisFermions();
+	unsigned int hilbert_fermions = basis_fermions.size();
 	double sum1 = 0;
 	for (unsigned int lindex = 0; lindex < n; ++lindex) {
 		int field = indexToField(lindex, n);
-		for (unsigned int i = 0; i < two_to_the_N; ++i) {
-			double gs_val = gs[i + lindex*two_to_the_N];
+		for (unsigned int i = 0; i < hilbert_fermions; ++i) {
+			double gs_val = gs[i + lindex*hilbert_fermions];
 			int prev = field;
 			double sum2 = 0;
+			unsigned int state_fermions = basis_fermions[i];
 			for (unsigned int site = 0; site < N; ++site) {
 				unsigned int mask1 = (1 << site);
-				unsigned int c1 = (i & mask1) ? 1 : 0; // charge at site
+				unsigned int c1 = (state_fermions & mask1) ? 1 : 0; // charge at site
 				int l1 = computeL(prev, c1, site, n);
 				sum2 += l1;
 				prev = l1;
@@ -194,36 +215,39 @@ void addNonDiagonalOneL(MatrixType& m, const VectorType& d, unsigned int ind, co
 	unsigned int N = params.get("N");
 	unsigned int n = params.get("n");
 	double t = params.get("t");
-	unsigned int two_to_the_N = (1 << N);
-	unsigned int hilbert = two_to_the_N*n;
+	unsigned int hilbert_fermions = params.basisFermions().size();
+	unsigned int hilbert = hilbert_fermions*n;
 	double factor = -t*n*0.5/M_PI;
 	int field = indexToField(ind, n);
 
 	m.resize(hilbert, hilbert);
 
-	for (unsigned i = 0; i < two_to_the_N; ++i) {
-		unsigned int row = ind*two_to_the_N + i;
+	for (unsigned i = 0; i < hilbert_fermions; ++i) {
+		unsigned int row = ind*hilbert_fermions + i;
 		m(row, row) = d[row];
 
+		unsigned int state_f = params.basisFermions()[i];
 		int prev = field;
 		// Open BC
 		for (unsigned int site = 0; site < N - 1; ++site) {
 			unsigned int mask1 = (1 << site);
 			unsigned int mask2 = (1 << (site + 1));
-			unsigned int c1 = (i & mask1) ? 1 : 0; // charge at site
-			unsigned int c2 = (i & mask2) ? 1 : 0; // charge at site + 1
+			unsigned int c1 = (state_f & mask1) ? 1 : 0; // charge at site
+			unsigned int c2 = (state_f & mask2) ? 1 : 0; // charge at site + 1
 			int l1 = computeL(prev, c1, site, n);
 			if (c1 == c2) {
 				prev = l1;
 				continue;
 			}
 
-			unsigned int j = (i ^ (mask1 | mask2));
+			unsigned int j = (state_f ^ (mask1 | mask2));
 
 			int l2 = computeLanySite(field, c2 - c1, n);
 
 			unsigned int l2index = fieldToIndex(l2, n);
-			unsigned int col = j + two_to_the_N*l2index;
+			unsigned int jindex = params.basisFermions().perfectIndex(j);
+			assert(jindex < hilbert_fermions);
+			unsigned int col = jindex + hilbert_fermions*l2index;
 			assert(col < m.cols());
 			assert(col != row);
 			// No fermion sign because it's one dimensional with OBC
@@ -246,16 +270,17 @@ VectorType buildDiagonalNoField(const ParamsType& params)
 	unsigned int N = params.get("N");
 	unsigned int n = params.get("n");
 	double m = params.get("mass");
-	unsigned int two_to_the_N = (1 << N);
 	double factor = m*n*0.5/M_PI;
-	VectorType dvector(two_to_the_N);
+	unsigned int hilbert_f = params.basisFermions().size();
+	VectorType dvector(hilbert_f);
 
-	for (unsigned i = 0; i < two_to_the_N; ++i) {
+	for (unsigned i = 0; i < hilbert_f; ++i) {
+		unsigned int state_f = params.basisFermions()[i];
 		double sum = 0;
 		for (unsigned int site = 0; site < N; ++site) {
 			double sign = (site & 1) ? -1 : 1;
 			unsigned int mask = (1 << site);
-			if (mask & i) {
+			if (mask & state_f) {
 				sum += sign;
 			}
 		}
@@ -270,19 +295,18 @@ void setDiagonal(VectorType& dvector, const VectorType& dvector0, unsigned int i
 {
 	double etilde = indexToField(ind, n);
 	const double e_squared = etilde * etilde;
-	unsigned int two_to_the_N = dvector0.size();
-	unsigned int offset = ind*two_to_the_N;
-	for (unsigned i = 0; i < two_to_the_N; ++i) {
+	unsigned int hilbert_f = dvector0.size();
+	unsigned int offset = ind*hilbert_f;
+	for (unsigned i = 0; i < hilbert_f; ++i) {
 		dvector[i + offset] = dvector0[i] + e_squared;
 	}
 }
 
 VectorType computeDiagonal(const ParamsType& params)
 {
-	unsigned int N = params.get("N");
 	unsigned int n = params.get("n");
-	unsigned int two_to_the_N = (1 << N);
-	unsigned int hilbert = n*two_to_the_N;
+	unsigned int hilbert_f = params.basisFermions().size();
+	unsigned int hilbert = n*hilbert_f;
 
 	VectorType dvector0 = buildDiagonalNoField(params);
 
