@@ -1,6 +1,6 @@
 integer use_lanczos 0
-integer N 8
+integer N 10
 integer n 3
-integer npart 4
 real mass -2.5
+special npart
 special t

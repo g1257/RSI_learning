@@ -89,6 +89,12 @@ public:
 			}
 
 			t_ = 2.*M_PI/n_;
+		} else if (label == "npart") {
+			if (N_ == 0) {
+				err("special npart needs N to be set before\n");
+			}
+
+			npart_ = N_/2;
 		} else {
 			 err("Params: unknown param or special " + label + "\n");
 		}
