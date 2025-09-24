@@ -340,7 +340,9 @@ void buildGroundStateLanczos(MatrixType& m, VectorType& gs, const ParamsType& pa
 
     SolverParametersType params_lanczos;
     params_lanczos.lotaMemory = true;
-	params_lanczos.tolerance = 1e-30;
+	params_lanczos.tolerance = 1e-40;
+	params_lanczos.options = "reortho";
+	params_lanczos.minSteps = 20;
 
     PsimagLite::LanczosSolver<SolverParametersType,
                               PsimagLite::CrsMatrix<double>,
@@ -349,6 +351,7 @@ void buildGroundStateLanczos(MatrixType& m, VectorType& gs, const ParamsType& pa
 
     double e = 0;
 	gs.resize(hilbert);
+	std::fill(gs.begin(), gs.end(), 0);
     VectorType initial(hilbert);
     PsimagLite::fillRandom(initial);
     lanczosSolver.computeOneState(e, gs, initial, 0);
@@ -385,7 +388,6 @@ void buildGroundState(VectorType& energies, VectorType& gs, const ParamsType& pa
 
 	bool use_lanczos = (params.get("use_lanczos") > 0);
 	if (use_lanczos) {
-		err("Lanczos support disabled for now (sorry)\n");
 		buildGroundStateLanczos(hamiltonian, gs, params);
 	} else {
 		buildGroundStateEd(energies, hamiltonian, gs);
@@ -402,8 +404,7 @@ std::vector<double> computeThings(ParamsType& params, double m_initial, unsigned
 		params.set("mass", mass);
 		buildGroundState(energies, gs, params);
 		sigma[i] = measureSigma(gs, params);
-		assert(energies.size() > 1);
-		double gap = energies[1] - energies[0];
+		double gap = (energies.size() > 1) ? energies[1] - energies[0] : 0;
 		std::cout<<mass<<" "<<sigma[i]<<" "<<gap<<"\n";
 	}
 
