@@ -10,18 +10,52 @@
 #include "Models/HubbardOneOrbital/BasisOneSpin.h"
 #include "BitManip.h"
 
+// Aliases
+//! Dense matrix from PsimagLite
 using MatrixType = PsimagLite::Matrix<double>;
+
+//! Sparse matrix (CRS) from PsimagLite
 using SparseMatrixType = PsimagLite::CrsMatrix<double>;
+
+//! Sparse row class
 using SparseRow = PsimagLite::SparseRow<SparseMatrixType>;
+
+//! Vector aliases
 using VectorType = std::vector<double>;
 using VectorUintType = std::vector<unsigned int>;
+
+/*! Basis of a spinless fermion with fixed number of electrons */
 using BasisFermions = LanczosPlusPlus::BasisOneSpin;
 
+/*! Table of combinatorials; static data */
 PsimagLite::Matrix<SizeType> LanczosPlusPlus::BasisOneSpin::comb_;
+
+/*! Number of sites for static data */
 SizeType LanczosPlusPlus::BasisOneSpin::nsite_;
 
+/*!
+ * \brief This class contains the parameters used by a single
+ *        diagonalization
+ */
 class Params {
 public:
+	/*!
+	 * \brief Constructor:
+	 *
+	 *  This constructor reads an input file and stores
+	 *  the parameters found in it.
+	 *  The format of the file is
+	 *  type label value
+	 *  where type can be real, integer, or special.
+	 *  The special type sets parameters to a special
+	 *  predetermined value and does not take value from the input.
+	 *
+	 * This ctor also allocates the basis of fermions with
+	 * a fixed nsites and number of electrons called npart,
+	 * where 0<=npart<=nsites
+	 *
+	 * \param[in] filename The filename for the input file
+	 */
 	Params(const std::string& filename)
 	{
 		std::ifstream fin(filename);
@@ -58,6 +92,24 @@ public:
 		std::cerr<<N_<<" "<<n_<<" "<<t_<<" "<<mass_<<"\n";
 	}
 
+	/*!
+	 * \brief Destructor
+	 *
+	 * This dtor deallocates the basis and sets it to the nullptr
+	 * to help debugging in case of memory bugs.
+	 */
+	~Params()
+	{
+		delete basis_fermions;
+		basis_fermions = nullptr;
+	}
+
+	/*!
+	 * \brief Sets a value for an uint parameter
+	 *
+	 * \param[in] label The name of the parameter
+	 * \param[in] value The value of the parameter
+	 */
 	void set(const std::string& label, unsigned int value)
 	{
 		if (label == "N") {
@@ -73,6 +125,11 @@ public:
 		}
 	}
 
+	/*! \brief Sets a value for a parameter of type double
+	 *
+	 * \param[in] label The name of the parameter
+	 * \param[in] value The value of the parameter
+	 */
 	void set(const std::string& label, double value)
 	{
 		if (label == "mass") {
@@ -84,6 +141,14 @@ public:
 		}
 	}
 
+	/*! \brief Sets a parameter to a special value
+	 *
+	 * This helps the user so that values for predetermined parameters
+	 * do not need to be specified, but still need to be listed in the
+	 * input file.
+	 *
+	 * \param[in] label The name of the parameter
+	 */
 	void setSpecial(const std::string& label)
 	{
 		if (label == "t") {
@@ -103,6 +168,15 @@ public:
 		}
 	}
 
+	/*! \brief Returns or gets the value of a parameter
+	 *
+	 * All parameters are returned as double, even if they
+	 * are integers. The caller should convert appropriately.
+	 *
+	 * \param[in] label The name of the wanted parameter
+	 *
+	 * \returns The value of the parameter as a double
+	 */
 	double get(const std::string& label) const
 	{
 		if (label == "N") {
@@ -124,6 +198,10 @@ public:
 		return 0;
 	}
 
+	/*! \brief Returns the fermionic basis object
+	 *
+	 * \returns A constant reference to the fermionic basis
+	 */
 	const BasisFermions& basisFermions() const
 	{
 		assert(basis_fermions);
@@ -132,27 +210,72 @@ public:
 
 private:
 
+	// The mass parameter
 	double mass_ = 0;
+
+	// The hopping parameter
 	double t_ = 0;
+
+	// The number of sites
 	unsigned int N_ = 0;
+
+	// The number of states for one link, or n in Z(n)
 	unsigned int n_ = 0;
+
+	// Whether to use lanczos or exact diag
 	unsigned int use_lanczos = 0;
+
+	// The number of electrons
 	unsigned int npart_ = 0;
+
+	// A pointer to the fermionic basis object
 	BasisFermions* basis_fermions = nullptr;
 };
 
+//! Alias for the Params class
 using ParamsType = Params;
 
+/*!
+ * \brief Returns the maximum field for a single link in Z(n)
+ *
+ * Example, n = 3, then maximum is 1, because the set is {-1, 0, 1}
+ * If n = 4, then the maximum is 2, because the set is {-2, -1, 1, 2}
+ *
+ * \param[in] n The number of states for a single link
+ *
+ * \returns The maximum field value
+ */
 int maxField(unsigned int n)
 {
 	return (n & 1) ? (n - 1)/2 : n/2;
 }
 
+/*!
+ * \brief Returns the field value for a given index
+ *
+ * Example: n = 3, then the field for 0 is -1, the field for 1 is 0,
+ * and the field for 2 is 1, given that the set of fields is
+ * {-1, 0, 1}
+ *
+ * \param[in] ind The index of the field wanted
+ * \param[in] n The number of states of a single link
+ * \returns The value of the field
+ */
 int indexToField(int ind, unsigned int n)
 {
 	return ind - maxField(n);
 }
 
+/*!
+ * \brief Returns the index for a given field
+ *
+ * Example: n = 3, then the index for field -1 is 0,
+ * the index for field 0 is 1, and the index for field 1 is 2.
+ *
+ * \param[in] l The value of the field
+ * \param[in] n The number of states of a single link
+ * \returns The index of the field
+ */
 unsigned int fieldToIndex(int l, unsigned int n)
 {
 	int index = l + maxField(n);
@@ -160,12 +283,28 @@ unsigned int fieldToIndex(int l, unsigned int n)
 	return index;
 }
 
+/*!
+ * \brief Determines whether a field value is valid
+ *
+ * \param[in] l The value of the field
+ * \param[in] n The number of states of a single link
+ * \returns true if the field is in range, false otherwise
+ */
 bool isInRange(int l, unsigned int n)
 {
 	int max = maxField(n);
 	return (l >= -max && l <= max);
 }
 
+/*!
+ * \brief Adds to field values with wrapping
+ *
+ * \param[in] prev The first field value
+ * \param[in] val The second field value
+ * \param[in] n The number of states in a single link
+ *
+ * \returns The sum of the fields with wrapping
+ */
 int computeLanySite(int prev, int val, unsigned int n)
 {
 	int l = prev + val;
@@ -184,12 +323,38 @@ int computeLanySite(int prev, int val, unsigned int n)
 	return l;
 }
 
+/*!
+ * \brief Computes a field value by Gauss law
+ *
+ * This function uses Gauss law to compute the field
+ * at the link following site site, given the charge charge
+ * at site site, and the field at the previous link
+ *
+ * \param[in] prev The field at the previous link
+ * \param[in] charge The charge
+ * \param[in] site The site
+ *
+ * \return The value of the field
+ */
 int computeL(int prev, int charge, unsigned int site, unsigned int n)
 {
 	int val = (site & 1) ? charge - 1 : charge;
 	return computeLanySite(prev, val, n);
 }
 
+/*!
+ * \brief Computes Sigma in a given state
+ *
+ * This function computes and returns
+ * \[
+ * \Sigma = \frac 1N \langle gs | \sum_i E_i | gs \rangle
+ * \]
+ *
+ * \param[in] gs The state vector in the computational basis
+ * \param[in] params The params object
+ *
+ * \return The value of \Sigma
+ */
 double measureSigma(const VectorType& gs, const ParamsType& params)
 {
 	unsigned int N = params.get("N");
@@ -219,6 +384,16 @@ double measureSigma(const VectorType& gs, const ParamsType& params)
 	return sum1/N;
 }
 
+/*!
+ * \brief Computes the Hamiltonian for one value of the border field
+ *
+ * \param[in/out] m The Hamiltonian matrix
+ * \param[in/out] counter A counter for the sparse matrix format
+ * \param[in] d The vector of precomputed diagonal values
+ * \param[in] ind The index of the border field
+ * \param[in] params The parameters object
+ *
+ */
 void addNonDiagonalOneL(SparseMatrixType& m, unsigned int& counter, const VectorType& d, unsigned int ind, const ParamsType& params)
 {
 	unsigned int N = params.get("N");
@@ -274,6 +449,16 @@ void addNonDiagonalOneL(SparseMatrixType& m, unsigned int& counter, const Vector
 	}
 }
 
+/*!
+ * \brief Adds together diagonal and non-diagonal elements of the Hamiltonian
+ *
+ * This functions runs a loop for all possible values of the border
+ * field. The diagonal elements were computed before.
+ *
+ * \param[in/out] sparse The hamiltonian in CRS form
+ * \param[in] diagonal The precomputed diagonal elements
+ * \param[in] params The parameters
+ */
 void addNonDiagonal(SparseMatrixType& msparse, const VectorType& diagonal, const ParamsType& params)
 {
 	unsigned int n = params.get("n");
@@ -288,6 +473,13 @@ void addNonDiagonal(SparseMatrixType& msparse, const VectorType& diagonal, const
 	msparse.checkValidity();
 }
 
+/*!
+ * \brief Computes the Hamiltonian values of the staggered mass term
+ *
+ * \param[in] params The parameters
+ *
+ * \returns The vector of diagonal elements for the mass term
+ */
 VectorType buildDiagonalNoField(const ParamsType& params)
 {
 	unsigned int N = params.get("N");
@@ -314,6 +506,14 @@ VectorType buildDiagonalNoField(const ParamsType& params)
 	return dvector;
 }
 
+/*!
+ * \brief Compute diagonal elements for one border field value
+ *
+ * \param[out] dvector The vector to store the diagonal values
+ * \param[in] dvector0 The vector containing the mass term diagonals
+ * \param[in] ind The index of the border field
+ * \param[in] n The number of states of a single link
+ */
 void setDiagonal(VectorType& dvector, const VectorType& dvector0, unsigned int ind, unsigned int n)
 {
 	double etilde = indexToField(ind, n);
@@ -325,6 +525,13 @@ void setDiagonal(VectorType& dvector, const VectorType& dvector0, unsigned int i
 	}
 }
 
+/*!
+ * \brief Compute all diagonal elements of the Hamiltonian
+ *
+ * \param[in] params The parameters
+ *
+ * \returns The vector of diagonals
+ */
 VectorType computeDiagonal(const ParamsType& params)
 {
 	unsigned int n = params.get("n");
@@ -341,12 +548,29 @@ VectorType computeDiagonal(const ParamsType& params)
 	return dvector;
 }
 
+/*!
+ * \brief Build the Hamiltonian in sparse matrix form
+ *
+ * This function first pre-computes the diagonals, and then
+ * it computes the off-diagonals and adds the diagonals to the full
+ * Hamiltonian matrix.
+ *
+ * \param[in] msparse[out] The Hamiltonian in CRS form
+ * \param[in] params[in] The parameters
+ */
 void buildHamiltonian(SparseMatrixType& msparse, const ParamsType& params)
 {
 	VectorType diagonal = computeDiagonal(params);
 	addNonDiagonal(msparse, diagonal, params);
 }
 
+/*!
+ * \brief Compute the ground state vector using Lanczos
+ *
+ * \param[in] msparse The CRS Hamiltonian matrix
+ * \param[out] gs The ground state vector
+ * \param[in] params The parameters
+ */
 void buildGroundStateLanczos(const SparseMatrixType& msparse, VectorType& gs, const ParamsType& params)
 {
 	unsigned int hilbert = msparse.rows();
@@ -373,6 +597,14 @@ void buildGroundStateLanczos(const SparseMatrixType& msparse, VectorType& gs, co
     lanczosSolver.computeOneState(e, gs, initial, 0);
 }
 
+/*!
+ * \brief Compute the ground state vector with dense diagonalization
+ *
+ * \param[out] eigs The eigenvalues of the Hamiltonian
+ * \param[in/out] m On input, the Hamiltonian matrix in dense form.
+ *                  On output, all the eigenvectors of the Hamiltonian
+ * \param[out] gs The lowest eigenvector of the Hamiltonian
+ */
 void buildGroundStateEd(VectorType& eigs, MatrixType& m, VectorType& gs)
 {
 	unsigned int hilbert = m.rows();
@@ -386,6 +618,13 @@ void buildGroundStateEd(VectorType& eigs, MatrixType& m, VectorType& gs)
 	}
 }
 
+/*!
+ * \brief Compute the ground state and its energy
+ *
+ * \param[out] energies [Only with exact diag.] All ground state energies
+ * \param[out] gs The ground state vector
+ * \param[in] params The parameters
+ */
 void buildGroundState(VectorType& energies, VectorType& gs, const ParamsType& params)
 {
 	SparseMatrixType hamiltonian;
@@ -416,21 +655,33 @@ void buildGroundState(VectorType& energies, VectorType& gs, const ParamsType& pa
 	}
 }
 
-std::vector<double> computeThings(ParamsType& params, double m_initial, unsigned int m_total, double m_step)
+/*!
+ * \brief Compute Hamiltonian properties for a range of masses
+ *
+ * Compute $\Sigma$ and the ground state vector. If using exact diag.,
+ * compute also all eigenvalues, and the first energy gap.
+ * This function prints to the standard output three columns:
+ * the mass, the value of $\Sigma$, the first energy gap.
+ * If using Lanzos the first energy gap appears as zero in all cases.
+ *
+ * \param[in] params The parameters
+ * \param[in] m_initial The initial mass
+ * \param[in] m_total The total number of mass values
+ * \param[in] m_step The step in mass
+ *
+ */
+void computeThings(ParamsType& params, double m_initial, unsigned int m_total, double m_step)
 {
-	std::vector<double> sigma(m_total);
 	std::vector<double> gs;
 	std::vector<double> energies;
 	for (unsigned int i = 0; i < m_total; ++i) {
 		double mass = m_initial + i*m_step;
 		params.set("mass", mass);
 		buildGroundState(energies, gs, params);
-		sigma[i] = measureSigma(gs, params);
+		double sigma= measureSigma(gs, params);
 		double gap = (energies.size() > 1) ? energies[1] - energies[0] : 0;
-		std::cout<<mass<<" "<<sigma[i]<<" "<<gap<<"\n";
+		std::cout<<mass<<" "<<sigma<<" "<<gap<<"\n";
 	}
-
-	return sigma;
 }
 
 int main(int argc, char* argv[])
@@ -444,5 +695,5 @@ int main(int argc, char* argv[])
 	double m_initial = std::atof(argv[2]);
 	unsigned int m_total = std::atoi(argv[3]);
 	double m_step = std::atof(argv[4]);
-	std::vector<double> sigmas = computeThings(params, m_initial, m_total, m_step);
+	computeThings(params, m_initial, m_total, m_step);
 }
