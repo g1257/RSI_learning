@@ -1,4 +1,4 @@
-CXXFLAGS=-Werror -Wall -O3 -I../../PsimagLite/src -I../../PsimagLite -g3 \
+CXXFLAGS=-Werror -Wall  -I../../PsimagLite/src -I../../PsimagLite -g3 \
 		 -I ../../LanczosPlusPlus/src -I../../LanczosPlusPlus/src/Engine
 LDFLAGS=../../LanczosPlusPlus/src/ProgramGlobals.o -L../../PsimagLite/lib -lpsimaglite -llapack -lblas 
 

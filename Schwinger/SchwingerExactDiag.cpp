@@ -3,6 +3,7 @@
 #include <fstream>
 
 #include "CrsMatrix.h"
+#include "SparseRow.h"
 #include "LanczosSolver.h"
 #include "Matrix.h"
 #include "PsimagLite.h"
@@ -10,6 +11,8 @@
 #include "BitManip.h"
 
 using MatrixType = PsimagLite::Matrix<double>;
+using SparseMatrixType = PsimagLite::CrsMatrix<double>;
+using SparseRow = PsimagLite::SparseRow<SparseMatrixType>;
 using VectorType = std::vector<double>;
 using VectorUintType = std::vector<unsigned int>;
 using BasisFermions = LanczosPlusPlus::BasisOneSpin;
@@ -216,7 +219,7 @@ double measureSigma(const VectorType& gs, const ParamsType& params)
 	return sum1/N;
 }
 
-void addNonDiagonalOneL(MatrixType& m, const VectorType& d, unsigned int ind, const ParamsType& params)
+void addNonDiagonalOneL(SparseMatrixType& m, unsigned int& counter, const VectorType& d, unsigned int ind, const ParamsType& params)
 {
 	unsigned int N = params.get("N");
 	unsigned int n = params.get("n");
@@ -226,11 +229,16 @@ void addNonDiagonalOneL(MatrixType& m, const VectorType& d, unsigned int ind, co
 	double factor = -t*n*0.5/M_PI;
 	int field = indexToField(ind, n);
 
-	m.resize(hilbert, hilbert);
+	assert(hilbert == m.rows());
+	assert(hilbert == d.size());
 
 	for (unsigned i = 0; i < hilbert_fermions; ++i) {
 		unsigned int row = ind*hilbert_fermions + i;
-		m(row, row) = d[row];
+
+		m.setRow(row, counter);
+		SparseRow sparse_row;
+		// Set the diagonal element computed elsewhere
+		sparse_row.add(row, d[row]);
 
 		unsigned int state_f = params.basisFermions()[i];
 		int prev = field;
@@ -257,18 +265,28 @@ void addNonDiagonalOneL(MatrixType& m, const VectorType& d, unsigned int ind, co
 			assert(col < m.cols());
 			assert(col != row);
 			// No fermion sign because it's one dimensional with OBC
-			m(row, col) += factor;
+			sparse_row.add(col, factor);
+
 			prev = l1;
 		}
+
+		// finish the row
+		counter += sparse_row.finalize(m);
 	}
 }
 
-void addNonDiagonal(MatrixType& m, const VectorType& diagonal, const ParamsType& params)
+void addNonDiagonal(SparseMatrixType& msparse, const VectorType& diagonal, const ParamsType& params)
 {
 	unsigned int n = params.get("n");
+	unsigned int hilbert = diagonal.size();
+	msparse.resize(hilbert, hilbert);
+	unsigned int counter = 0; // for sparse matrix rowptr
 	for (unsigned i = 0; i < n; ++i) {
-		addNonDiagonalOneL(m, diagonal, i, params);
+		addNonDiagonalOneL(msparse, counter, diagonal, i, params);
 	}
+
+	msparse.setRow(hilbert, counter);
+	msparse.checkValidity();
 }
 
 VectorType buildDiagonalNoField(const ParamsType& params)
@@ -324,17 +342,16 @@ VectorType computeDiagonal(const ParamsType& params)
 	return dvector;
 }
 
-void buildHamiltonian(MatrixType& m, const ParamsType& params)
+void buildHamiltonian(SparseMatrixType& msparse, const ParamsType& params)
 {
 	VectorType diagonal = computeDiagonal(params);
-	addNonDiagonal(m, diagonal, params);
+	addNonDiagonal(msparse, diagonal, params);
 }
 
-void buildGroundStateLanczos(MatrixType& m, VectorType& gs, const ParamsType& params)
+void buildGroundStateLanczos(const SparseMatrixType& msparse, VectorType& gs, const ParamsType& params)
 {
-	unsigned int hilbert = m.rows();
-	assert(m.cols() == hilbert);
-    PsimagLite::CrsMatrix<double> msparse(m);
+	unsigned int hilbert = msparse.rows();
+	assert(msparse.cols() == hilbert);
 
 	using SolverParametersType = PsimagLite::ParametersForSolver<double>;
 
@@ -372,25 +389,31 @@ void buildGroundStateEd(VectorType& eigs, MatrixType& m, VectorType& gs)
 
 void buildGroundState(VectorType& energies, VectorType& gs, const ParamsType& params)
 {
-	MatrixType hamiltonian;
+	SparseMatrixType hamiltonian;
 	buildHamiltonian(hamiltonian, params);
 
-	if (!isHermitian(hamiltonian)) {
+	unsigned int hilbert = hamiltonian.rows();
+	assert(hilbert == hamiltonian.cols());
+
+	if (hilbert < 4097 && !isHermitian(hamiltonian.toDense())) {
 		if (hamiltonian.rows() < 40) {
-			std::cout<<hamiltonian;
+			std::cout<<hamiltonian.toDense();
 		}
 
 		err("Ham not hermitian\n");
 	}
 
-	unsigned int hilbert = hamiltonian.rows();
-	assert(hilbert == hamiltonian.cols());
-
 	bool use_lanczos = (params.get("use_lanczos") > 0);
 	if (use_lanczos) {
 		buildGroundStateLanczos(hamiltonian, gs, params);
 	} else {
-		buildGroundStateEd(energies, hamiltonian, gs);
+		if (hilbert > 4096) {
+			err("Hilbert size to big for exact diag; set use_lanczos in your input file instead\n");
+		}
+
+		MatrixType denseH = hamiltonian.toDense();
+		// denseH will become eigenvectors
+		buildGroundStateEd(energies, denseH, gs);
 	}
 }
 
