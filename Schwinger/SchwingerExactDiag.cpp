@@ -17,7 +17,7 @@ using MatrixType = PsimagLite::Matrix<double>;
 //! Sparse matrix (CRS) from PsimagLite
 using SparseMatrixType = PsimagLite::CrsMatrix<double>;
 
-//! Sparse row class
+//! Sparse row class (helper for CRS)
 using SparseRow = PsimagLite::SparseRow<SparseMatrixType>;
 
 //! Vector aliases
@@ -34,21 +34,20 @@ PsimagLite::Matrix<SizeType> LanczosPlusPlus::BasisOneSpin::comb_;
 SizeType LanczosPlusPlus::BasisOneSpin::nsite_;
 
 /*!
- * \brief This class contains the parameters used by a single
- *        diagonalization
+ * \brief This class contains the most parameters
  */
 class Params {
 public:
 	/*!
 	 * \brief Constructor:
 	 *
-	 *  This constructor reads an input file and stores
-	 *  the parameters found in it.
-	 *  The format of the file is
-	 *  type label value
-	 *  where type can be real, integer, or special.
-	 *  The special type sets parameters to a special
-	 *  predetermined value and does not take value from the input.
+	 * This constructor reads an input file and stores
+	 * the parameters found in it.
+	 * The format of the file is
+	 * type label value
+	 * where type can be real, integer, or special.
+	 * The special type sets parameters to a special
+	 * predetermined value and does not take value from the input.
 	 *
 	 * This ctor also allocates the basis of fermions with
 	 * a fixed nsites and number of electrons called npart,
@@ -105,7 +104,7 @@ public:
 	}
 
 	/*!
-	 * \brief Sets a value for an uint parameter
+	 * \brief Sets a value for a parameter of type unsigned int
 	 *
 	 * \param[in] label The name of the parameter
 	 * \param[in] value The value of the parameter
@@ -143,7 +142,7 @@ public:
 
 	/*! \brief Sets a parameter to a special value
 	 *
-	 * This helps the user so that values for predetermined parameters
+	 * This helps the user: values for predetermined parameters
 	 * do not need to be specified, but still need to be listed in the
 	 * input file.
 	 *
@@ -219,7 +218,7 @@ private:
 	// The number of sites
 	unsigned int N_ = 0;
 
-	// The number of states for one link, or n in Z(n)
+	// The number of states for one link: n in Z(n)
 	unsigned int n_ = 0;
 
 	// Whether to use lanczos or exact diag
@@ -328,7 +327,7 @@ int computeLanySite(int prev, int val, unsigned int n)
  *
  * This function uses Gauss law to compute the field
  * at the link following site site, given the charge charge
- * at site site, and the field at the previous link
+ * at site site, and the field prev at the previous link
  *
  * \param[in] prev The field at the previous link
  * \param[in] charge The charge
@@ -387,7 +386,7 @@ double measureSigma(const VectorType& gs, const ParamsType& params)
 /*!
  * \brief Computes the Hamiltonian for one value of the border field
  *
- * \param[in/out] m The Hamiltonian matrix
+ * \param[out] m The Hamiltonian matrix
  * \param[in/out] counter A counter for the sparse matrix format
  * \param[in] d The vector of precomputed diagonal values
  * \param[in] ind The index of the border field
@@ -455,9 +454,9 @@ void addNonDiagonalOneL(SparseMatrixType& m, unsigned int& counter, const Vector
  * This functions runs a loop for all possible values of the border
  * field. The diagonal elements were computed before.
  *
- * \param[in/out] sparse The hamiltonian in CRS form
- * \param[in] diagonal The precomputed diagonal elements
- * \param[in] params The parameters
+ * \param[out] msparse The hamiltonian in CRS form
+ * \param[in]  diagonal The precomputed diagonal elements
+ * \param[in]  params The parameters
  */
 void addNonDiagonal(SparseMatrixType& msparse, const VectorType& diagonal, const ParamsType& params)
 {
@@ -507,12 +506,12 @@ VectorType buildDiagonalNoField(const ParamsType& params)
 }
 
 /*!
- * \brief Compute diagonal elements for one border field value
+ * \brief Computes diagonal elements for one border field value
  *
  * \param[out] dvector The vector to store the diagonal values
- * \param[in] dvector0 The vector containing the mass term diagonals
- * \param[in] ind The index of the border field
- * \param[in] n The number of states of a single link
+ * \param[in]  dvector0 The vector containing the mass term diagonals
+ * \param[in]  ind The index of the border field
+ * \param[in]  n The number of states of a single link
  */
 void setDiagonal(VectorType& dvector, const VectorType& dvector0, unsigned int ind, unsigned int n)
 {
@@ -526,7 +525,7 @@ void setDiagonal(VectorType& dvector, const VectorType& dvector0, unsigned int i
 }
 
 /*!
- * \brief Compute all diagonal elements of the Hamiltonian
+ * \brief Computes all diagonal elements of the Hamiltonian
  *
  * \param[in] params The parameters
  *
@@ -549,14 +548,13 @@ VectorType computeDiagonal(const ParamsType& params)
 }
 
 /*!
- * \brief Build the Hamiltonian in sparse matrix form
+ * \brief Builds the Hamiltonian in sparse matrix form
  *
  * This function first pre-computes the diagonals, and then
- * it computes the off-diagonals and adds the diagonals to the full
- * Hamiltonian matrix.
+ * computes the off-diagonals and adds the diagonals to them.
  *
  * \param[in] msparse[out] The Hamiltonian in CRS form
- * \param[in] params[in] The parameters
+ * \param[in] params[in]   The parameters
  */
 void buildHamiltonian(SparseMatrixType& msparse, const ParamsType& params)
 {
@@ -565,13 +563,15 @@ void buildHamiltonian(SparseMatrixType& msparse, const ParamsType& params)
 }
 
 /*!
- * \brief Compute the ground state vector using Lanczos
+ * \brief Computes the ground state vector using Lanczos
  *
- * \param[in] msparse The CRS Hamiltonian matrix
- * \param[out] gs The ground state vector
- * \param[in] params The parameters
+ * \param[in]  msparse The CRS Hamiltonian matrix
+ * \param[out] gs      The ground state vector
+ * \param[in]  params  The parameters
+ *
+ * \returns The ground state energy
  */
-void buildGroundStateLanczos(const SparseMatrixType& msparse, VectorType& gs, const ParamsType& params)
+double buildGroundStateLanczos(const SparseMatrixType& msparse, VectorType& gs, const ParamsType& params)
 {
 	unsigned int hilbert = msparse.rows();
 	assert(msparse.cols() == hilbert);
@@ -595,15 +595,18 @@ void buildGroundStateLanczos(const SparseMatrixType& msparse, VectorType& gs, co
     VectorType initial(hilbert);
     PsimagLite::fillRandom(initial);
     lanczosSolver.computeOneState(e, gs, initial, 0);
+	return e;
 }
 
 /*!
  * \brief Compute the ground state vector with dense diagonalization
  *
- * \param[out] eigs The eigenvalues of the Hamiltonian
- * \param[in/out] m On input, the Hamiltonian matrix in dense form.
- *                  On output, all the eigenvectors of the Hamiltonian
- * \param[out] gs The lowest eigenvector of the Hamiltonian
+ * \param[out]    eigs The eigenvalues of the Hamiltonian
+ *
+ * \param[in/out] m    On input, the Hamiltonian matrix in dense form.
+ *                     On output, all the eigenvectors of the Hamiltonian
+ *
+ * \param[out]    gs   The lowest eigenvector of the Hamiltonian
  */
 void buildGroundStateEd(VectorType& eigs, MatrixType& m, VectorType& gs)
 {
@@ -619,10 +622,14 @@ void buildGroundStateEd(VectorType& eigs, MatrixType& m, VectorType& gs)
 }
 
 /*!
- * \brief Compute the ground state and its energy
+ * \brief Computes the ground state vector and its energy
  *
- * \param[out] energies [Only with exact diag.] All ground state energies
- * \param[out] gs The ground state vector
+ * \param[out] energies If using exact diag., all ground state energies
+ *                      If using Lanczos, energies is a vector of size one,
+ *                      containing only the ground state energy.
+ *
+ * \param[out] gs The ground state vector in the computational basis
+ *
  * \param[in] params The parameters
  */
 void buildGroundState(VectorType& energies, VectorType& gs, const ParamsType& params)
@@ -643,7 +650,9 @@ void buildGroundState(VectorType& energies, VectorType& gs, const ParamsType& pa
 
 	bool use_lanczos = (params.get("use_lanczos") > 0);
 	if (use_lanczos) {
-		buildGroundStateLanczos(hamiltonian, gs, params);
+		double e = buildGroundStateLanczos(hamiltonian, gs, params);
+		energies.resize(1);
+		energies[0] = e;
 	} else {
 		if (hilbert > 4096) {
 			err("Hilbert size to big for exact diag; set use_lanczos in your input file instead\n");
@@ -661,8 +670,8 @@ void buildGroundState(VectorType& energies, VectorType& gs, const ParamsType& pa
  * Compute $\Sigma$ and the ground state vector. If using exact diag.,
  * compute also all eigenvalues, and the first energy gap.
  * This function prints to the standard output three columns:
- * the mass, the value of $\Sigma$, the first energy gap.
- * If using Lanzos the first energy gap appears as zero in all cases.
+ * the mass, the value of $\Sigma$, and the first energy gap.
+ * If using Lanzcos, the first energy gap appears as zero in all cases.
  *
  * \param[in] params The parameters
  * \param[in] m_initial The initial mass
