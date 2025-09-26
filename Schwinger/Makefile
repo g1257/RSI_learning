@@ -1,4 +1,5 @@
-CXXFLAGS=-Werror -Wall  -I../../PsimagLite/src -I../../PsimagLite -g3 \
+OPTIMIZATION= -DNDEBUG -O3
+CXXFLAGS=-Werror -Wall  -I../../PsimagLite/src -I../../PsimagLite -g3 $(OPTIMIZATION) \
 		 -I ../../LanczosPlusPlus/src -I../../LanczosPlusPlus/src/Engine
 LDFLAGS=../../LanczosPlusPlus/src/ProgramGlobals.o -L../../PsimagLite/lib -lpsimaglite -llapack -lblas 
 

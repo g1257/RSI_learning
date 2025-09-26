@@ -1,5 +1,5 @@
-integer use_lanczos 0
-integer N 8
+integer use_lanczos 1
+integer N 10
 integer n 3
 real mass -2.5
 special npart

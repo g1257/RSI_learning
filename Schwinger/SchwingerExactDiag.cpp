@@ -225,11 +225,10 @@ void addNonDiagonalOneL(SparseMatrixType& m, unsigned int& counter, const Vector
 	unsigned int n = params.get("n");
 	double t = params.get("t");
 	unsigned int hilbert_fermions = params.basisFermions().size();
-	unsigned int hilbert = hilbert_fermions*n;
 	double factor = -t*n*0.5/M_PI;
 	int field = indexToField(ind, n);
 
-	assert(hilbert == m.rows());
+	assert(hilbert_fermions*n == m.rows());
 	assert(hilbert == d.size());
 
 	for (unsigned i = 0; i < hilbert_fermions; ++i) {
