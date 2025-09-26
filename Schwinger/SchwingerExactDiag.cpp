@@ -1,3 +1,5 @@
+/*! \file ../SchwingerExactDiag.cpp */
+
 #include <string>
 #include <vector>
 #include <fstream>
